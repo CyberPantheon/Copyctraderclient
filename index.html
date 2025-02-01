@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Copy Trading Login</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+        .btn { padding: 10px 20px; font-size: 18px; background: #28a745; color: white; border: none; cursor: pointer; }
+        .btn:hover { background: #218838; }
+    </style>
+</head>
+<body>
+
+    <h2>Copy Trading client portal</h2>
+    <p>Click below to log in with your Deriv account.</p>
+    <button id="loginBtn" class="btn">Login with Deriv</button>
+
+    <script>
+        const APP_ID = 66842;
+        document.getElementById("loginBtn").addEventListener("click", () => {
+            window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${APP_ID}`;
+        });
+
+        // Check if user is already logged in and redirect
+        if (localStorage.getItem("masterAccount")) {
+            window.location.href = "client.html";
+        }
+    </script>
+
+</body>
+</html>
