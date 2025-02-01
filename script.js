@@ -1,4 +1,3 @@
-// script.js
 const APP_ID = 66842;
 let currentAccounts = [];
 let activeCopies = new Map();
@@ -9,9 +8,9 @@ const derivWS = {
     conn: null,
     reqId: 1,
 
-    connect: function(token) {
+    connect: function (token) {
         this.conn = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`);
-        
+
         this.conn.onopen = () => {
             log('🔌 WebSocket connected', 'success');
             this.authorize(token);
@@ -21,29 +20,29 @@ const derivWS = {
         this.conn.onerror = (e) => log(`⚠️ WebSocket error: ${e.message}`, 'error');
     },
 
-    authorize: function(token) {
+    authorize: function (token) {
         this.send({ authorize: token });
     },
 
-    send: function(data) {
-        if(this.conn.readyState === WebSocket.OPEN) {
+    send: function (data) {
+        if (this.conn.readyState === WebSocket.OPEN) {
             data.req_id = this.reqId++;
             this.conn.send(JSON.stringify(data));
             log(`📤 Sent: ${JSON.stringify(data)}`, 'info');
         }
     },
 
-    handleMessage: function(response) {
-        if(response.error) {
+    handleMessage: function (response) {
+        if (response.error) {
             log(`❌ Error: ${response.error.message}`, 'error');
             return;
         }
 
-        if(response.authorize) {
+        if (response.authorize) {
             handleAuthorization(response);
-        } else if(response.copy_start) {
+        } else if (response.copy_start) {
             handleCopyStart(response);
-        } else if(response.copy_stop) {
+        } else if (response.copy_stop) {
             handleCopyStop(response);
         }
     }
@@ -52,8 +51,8 @@ const derivWS = {
 document.addEventListener('DOMContentLoaded', () => {
     const params = new URLSearchParams(window.location.search);
     const tokens = parseTokensFromURL(params);
-    
-    if(tokens.length === 0) {
+
+    if (tokens.length === 0) {
         log('⚠️ No valid accounts found', 'error');
         return;
     }
@@ -66,8 +65,8 @@ document.addEventListener('DOMContentLoaded', () => {
 function parseTokensFromURL(params) {
     const accounts = [];
     let i = 1;
-    
-    while(params.get(`acct${i}`)) {
+
+    while (params.get(`acct${i}`)) {
         accounts.push({
             id: params.get(`acct${i}`),
             token: params.get(`token${i}`),
@@ -76,7 +75,7 @@ function parseTokensFromURL(params) {
         });
         i++;
     }
-    
+
     return accounts;
 }
 
@@ -86,7 +85,7 @@ function setupAccountsUI() {
         <div class="account-card">
             <h3>💰 ${acc.id}</h3>
             <p>${acc.currency.toUpperCase()} - ${acc.balance}</p>
-            <button class="copy-btn" onclick="handleCopyAction('${acc.id}')" 
+            <button class="copy-btn" onclick="handleCopyAction('${acc.id}')"
                 ${!masterAccount ? 'disabled' : ''}>
                 ${activeCopies.has(acc.id) ? '🛑 Stop Copy' : '📋 Start Copy'}
             </button>
@@ -96,25 +95,26 @@ function setupAccountsUI() {
 
 function authenticateMaster() {
     const token = document.getElementById('masterToken').value;
-    if(!token) {
+    if (!token) {
         log('⚠️ Please enter master token', 'error');
         return;
     }
 
     const tempWS = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`);
     tempWS.onopen = () => tempWS.send(JSON.stringify({ authorize: token }));
-    
+
     tempWS.onmessage = (e) => {
         const response = JSON.parse(e.data);
-        if(response.authorize) {
+        if (response.authorize) {
             masterAccount = {
                 id: response.authorize.loginid,
+                token: token, // Save trader token
                 currency: response.authorize.currency,
                 balance: response.authorize.balance
             };
             updateMasterUI();
             log('🔓 Master authenticated successfully', 'success');
-        } else if(response.error) {
+        } else if (response.error) {
             log(`❌ Master auth failed: ${response.error.message}`, 'error');
         }
         tempWS.close();
@@ -135,26 +135,36 @@ function updateMasterUI() {
 
 function handleCopyAction(accountId) {
     const account = currentAccounts.find(acc => acc.id === accountId);
-    
-    if(account.currency !== masterAccount.currency) {
+
+    if (!masterAccount) {
+        log('❌ No master account authenticated', 'error');
+        return;
+    }
+
+    if (account.currency !== masterAccount.currency) {
         log(`❌ Currency mismatch: ${account.currency} vs ${masterAccount.currency}`, 'error');
         return;
     }
 
-    if(activeCopies.has(accountId)) {
+    if (activeCopies.has(accountId)) {
         derivWS.send({ copy_stop: activeCopies.get(accountId) });
     } else {
         derivWS.send({
-            "copy_start": "masterAccount.token",
-            "loginid": "accountId"
+            copy_start: masterAccount.token, // Correct API token format
+            loginid: account.id, // Correct format for loginid
+            req_id: derivWS.reqId
         });
     }
 }
 
 function handleCopyStart(response) {
-    activeCopies.set(response.echo_req.loginid, response.copy_start);
-    setupAccountsUI();
-    log('📈 Copy trading started successfully', 'success');
+    if (response.copy_start === 1) {
+        activeCopies.set(response.echo_req.loginid, response.echo_req.copy_start);
+        setupAccountsUI();
+        log('📈 Copy trading started successfully', 'success');
+    } else {
+        log('❌ Copy trading failed', 'error');
+    }
 }
 
 function handleCopyStop(response) {
