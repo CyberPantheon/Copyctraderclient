@@ -3,30 +3,74 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Copy Trading Login</title>
+    <title>Deriv Copy Trading</title>
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
-        .btn { padding: 10px 20px; font-size: 18px; background: #28a745; color: white; border: none; cursor: pointer; }
-        .btn:hover { background: #218838; }
+        /* Keep existing styles */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
+            height: 100vh;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #fff;
+        }
+
+        .container {
+            text-align: center;
+            padding: 2rem;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 15px;
+            box-shadow: 0 0 20px rgba(0, 255, 165, 0.3);
+            max-width: 600px;
+            width: 90%;
+        }
+
+        h1 {
+            color: #00ffa5;
+            margin-bottom: 1.5rem;
+            font-size: 2.5em;
+        }
+
+        p {
+            color: #ccc;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+
+        .login-btn {
+            background: #00ffa5;
+            color: #1a1a1a;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 25px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 255, 165, 0.4);
+        }
     </style>
 </head>
 <body>
-
-    <h2>Copy Trading client portal</h2>
-    <p>Click below to log in with your Deriv account.</p>
-    <button id="loginBtn" class="btn">Login with Deriv</button>
+    <div class="container">
+        <h1>Deriv Copy Trading Client Portal</h1>
+        <p>Automatically replicate trades from experienced traders. Connect your Deriv account securely and start copy trading in minutes.</p>
+        <button class="login-btn" onclick="initOAuth()">Login with Deriv</button>
+    </div>
 
     <script>
-        const APP_ID = 66842;
-        document.getElementById("loginBtn").addEventListener("click", () => {
-            window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${APP_ID}`;
-        });
-
-        // Check if user is already logged in and redirect
-        if (localStorage.getItem("masterAccount")) {
-            window.location.href = "client.html";
+        function initOAuth() {
+            const appId = '66842'; // Your full app ID
+            window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${appId}`;
         }
     </script>
-
 </body>
 </html>
