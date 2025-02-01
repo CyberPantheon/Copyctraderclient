@@ -145,8 +145,8 @@ function handleCopyAction(accountId) {
         derivWS.send({ copy_stop: activeCopies.get(accountId) });
     } else {
         derivWS.send({
-            copy_start: masterAccount.token,
-            loginid: accountId
+            "copy_start": "masterAccount.token",
+            "loginid": "accountId"
         });
     }
 }
