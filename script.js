@@ -216,8 +216,8 @@ function deleteMaster() {
 
 function logout() {
     // Stop all active copies
-    activeCopies.forEach((_, accountId) => {
-        derivWS.send({ copy_stop: accountId });
+    activeCopies.forEach((token, accountId) => {
+        derivWS.send({ copy_stop: token }); // Use the stored token for copy_stop
     });
 
     // Redirect after cleanup
