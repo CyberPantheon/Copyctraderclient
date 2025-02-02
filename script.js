@@ -1,7 +1,8 @@
 const APP_ID = 66842;
 let currentAccounts = [];
-let activeCopies = new Map();
+let activeCopies = new Map(); // Now stores account IDs mapped to their tokens
 let masterAccount = null;
+let ws;
 
 const derivWS = {
     conn: null,
@@ -10,7 +11,7 @@ const derivWS = {
 
     connect: function(token) {
         this.currentToken = token;
-        if (this.conn) this.conn.close();
+        if(this.conn) this.conn.close();
         
         this.conn = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`);
         
@@ -30,7 +31,7 @@ const derivWS = {
     },
 
     send: function(data) {
-        if (this.conn.readyState === WebSocket.OPEN) {
+        if(this.conn.readyState === WebSocket.OPEN) {
             data.req_id = this.reqId++;
             this.conn.send(JSON.stringify(data));
             log(`📤 Sent: ${JSON.stringify(data, null, 2)}`, 'info', data);
@@ -40,25 +41,25 @@ const derivWS = {
     handleMessage: function(response) {
         log(`📥 Received: ${JSON.stringify(response, null, 2)}`, 'info', response);
         
-        if (response.error) {
+        if(response.error) {
             log(`❌ Error: ${response.error.message}`, 'error');
             return;
         }
 
-        if (response.authorize) {
+        if(response.authorize) {
             handleAuthorization(response);
-        } else if (response.copy_start) {
+        } else if(response.msg_type === 'copy_start') {
             handleCopyStart(response);
-        } else if (response.copy_stop) {
+        } else if(response.msg_type === 'copy_stop') {
             handleCopyStop(response);
-        } else if (response.pong) {
+        } else if(response.pong) {
             log('🏓 Received pong', 'info');
         }
     },
 
     startPing: function() {
         setInterval(() => {
-            if (this.conn.readyState === WebSocket.OPEN) {
+            if(this.conn.readyState === WebSocket.OPEN) {
                 this.send({ ping: 1 });
             }
         }, 30000);
@@ -69,7 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const params = new URLSearchParams(window.location.search);
     const tokens = parseTokensFromURL(params);
     
-    if (tokens.length === 0) {
+    if(tokens.length === 0) {
         log('⚠️ No valid accounts found', 'error');
         return;
     }
@@ -83,7 +84,7 @@ function parseTokensFromURL(params) {
     const accounts = [];
     let i = 1;
     
-    while (params.get(`acct${i}`)) {
+    while(params.get(`acct${i}`)) {
         accounts.push({
             id: params.get(`acct${i}`),
             token: params.get(`token${i}`),
@@ -112,7 +113,7 @@ function setupAccountsUI() {
 
 function authenticateMaster() {
     const token = document.getElementById('masterToken').value;
-    if (!token) {
+    if(!token) {
         log('⚠️ Please enter master token', 'error');
         return;
     }
@@ -122,7 +123,7 @@ function authenticateMaster() {
     
     tempWS.onmessage = (e) => {
         const response = JSON.parse(e.data);
-        if (response.authorize) {
+        if(response.authorize) {
             masterAccount = {
                 id: response.authorize.loginid,
                 currency: response.authorize.currency,
@@ -131,7 +132,7 @@ function authenticateMaster() {
             };
             updateMasterUI();
             log('🔓 Master authenticated successfully', 'success');
-        } else if (response.error) {
+        } else if(response.error) {
             log(`❌ Master auth failed: ${response.error.message}`, 'error');
         }
         tempWS.close();
@@ -152,32 +153,32 @@ function updateMasterUI() {
 
 async function handleCopyAction(accountId) {
     const account = currentAccounts.find(acc => acc.id === accountId);
-    if (!account) return;
+    if(!account) return;
 
-    if (derivWS.currentToken !== masterAccount.token) {
+    // Switch to target account's token
+    if(derivWS.currentToken !== account.token) {
         await new Promise((resolve) => {
             const authHandler = (e) => {
                 const response = JSON.parse(e.data);
-                if (response.authorize?.loginid === masterAccount.id) {
+                if(response.authorize?.loginid === accountId) {
                     derivWS.conn.removeEventListener('message', authHandler);
                     resolve();
                 }
             };
             derivWS.conn.addEventListener('message', authHandler);
-            derivWS.authorize(masterAccount.token);
+            derivWS.authorize(account.token);
         });
     }
 
-    if (account.currency !== masterAccount.currency) {
+    // Verify currency match
+    if(account.currency !== masterAccount.currency) {
         log(`❌ Currency mismatch: ${account.currency} vs ${masterAccount.currency}`, 'error');
         return;
     }
 
-    if (activeCopies.has(accountId)) {
-        derivWS.send({
-            copy_stop: account.token,  // ✅ FIX: Use client's stored API token
-            loginid: accountId
-        });
+    // Send copy request
+    if(activeCopies.has(accountId)) {
+        derivWS.send({ copy_stop: activeCopies.get(accountId) }); // Send stored token
     } else {
         derivWS.send({
             copy_start: masterAccount.token,
@@ -187,20 +188,26 @@ async function handleCopyAction(accountId) {
 }
 
 function handleCopyStart(response) {
-    if (response.msg_type === 'copy_start' && response.copy_start === 1) {
-        activeCopies.set(response.echo_req.loginid, response.echo_req.copy_start);
-        setupAccountsUI();
-        log(`📈 Copy started for ${response.echo_req.loginid}`, 'success');
+    if(response.msg_type === 'copy_start') {
+        const loginid = response.echo_req.loginid;
+        const account = currentAccounts.find(acc => acc.id === loginid);
+        if (account) {
+            activeCopies.set(loginid, account.token); // Store account's token instead of response integer
+            setupAccountsUI();
+            log(`📈 Copy started for ${loginid}`, 'success');
+        } else {
+            log(`❌ Account ${loginid} not found`, 'error');
+        }
     } else {
         log(`❌ Copy start failed: ${response.error?.message || 'Unknown error'}`, 'error');
     }
 }
 
 function handleCopyStop(response) {
-    if (response.msg_type === 'copy_stop' && response.copy_stop === 1) {
-        activeCopies.delete(response.echo_req.loginid);
+    if(response.msg_type === 'copy_stop') {
+        activeCopies.delete(response.echo_req.copy_stop); // Remove using the token
         setupAccountsUI();
-        log(`📉 Copy stopped for ${response.echo_req.loginid}`, 'info');
+        log(`📉 Copy stopped for ${response.echo_req.copy_stop}`, 'info');
     } else {
         log(`❌ Copy stop failed: ${response.error?.message || 'Unknown error'}`, 'error');
     }
@@ -214,11 +221,8 @@ function deleteMaster() {
 }
 
 function logout() {
-    activeCopies.forEach((_, accountId) => {
-        const account = currentAccounts.find(acc => acc.id === accountId);
-        if (account) {
-            derivWS.send({ copy_stop: account.token });  // ✅ FIX: Use correct token for stopping copy
-        }
+    activeCopies.forEach((token, accountId) => {
+        derivWS.send({ copy_stop: token });
     });
 
     setTimeout(() => {
@@ -232,13 +236,13 @@ function log(message, type = 'info', data = null) {
     entry.className = `log-entry log-${type}`;
     
     let content = `[${new Date().toLocaleTimeString()}] ${message}`;
-    if (data) {
+    if(data) {
         content += `<div class="log-data">${JSON.stringify(data, null, 2)}</div>`;
     }
 
     entry.innerHTML = content;
     
-    if (logContainer.children.length > 50) {
+    if(logContainer.children.length > 50) {
         logContainer.removeChild(logContainer.firstChild);
     }
     
