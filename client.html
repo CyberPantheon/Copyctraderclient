@@ -1,8 +1,8 @@
-<!-- home.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Client Control Panel - Deriv Copy Trading</title>
     <style>
         :root {
@@ -26,33 +26,13 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
             gap: 15px;
         }
 
-        .account-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-
-        .account-card {
-            background: var(--card-bg);
-            border-radius: 12px;
-            padding: 20px;
-            transition: transform 0.2s;
-        }
-
-        .account-card:hover {
-            transform: translateY(-3px);
-        }
-
-        .master-section {
-            background: var(--card-bg);
-            border-radius: 12px;
-            padding: 20px;
-            margin: 20px 0;
+        .header h1 {
+            font-size: 24px;
+            margin: 0;
         }
 
         .input-group {
@@ -103,13 +83,40 @@
             color: white;
         }
 
+        .master-section {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .account-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .account-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 15px;
+            transition: transform 0.2s;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .account-card:hover {
+            transform: translateY(-3px);
+        }
+
         .log-container {
             background: var(--card-bg);
-            padding: 20px;
+            padding: 15px;
             border-radius: 12px;
-            height: 300px;
+            height: 200px;
             overflow-y: auto;
-            margin-top: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
 
         .log-entry {
@@ -119,11 +126,63 @@
             display: flex;
             align-items: center;
             gap: 10px;
+            font-size: 14px;
         }
 
         .log-success { background: rgba(0, 255, 165, 0.1); }
         .log-error { background: rgba(255, 68, 68, 0.1); }
         .log-info { background: rgba(52, 152, 219, 0.1); }
+
+        /* Media Queries for Mobile */
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .header h1 {
+                font-size: 20px;
+            }
+
+            .input-group {
+                flex-direction: column;
+            }
+
+            .account-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .account-card {
+                padding: 12px;
+            }
+
+            .log-container {
+                height: 150px;
+            }
+
+            button {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 10px;
+            }
+
+            .header h1 {
+                font-size: 18px;
+            }
+
+            .log-container {
+                height: 120px;
+            }
+
+            .log-entry {
+                font-size: 12px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -139,9 +198,9 @@
 
     <div class="master-section" id="masterInfo"></div>
 
-    <div class="account-grid" id="accountsContainer"></div>
-
     <div class="log-container" id="logContainer"></div>
+
+    <div class="account-grid" id="accountsContainer"></div>
 
     <script src="script.js"></script>
 </body>
