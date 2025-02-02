@@ -18,6 +18,7 @@ const derivWS = {
         this.conn.onopen = () => {
             log('🔌 WebSocket connected', 'success');
             this.authorize(token);
+            this.startPing(); // Start ping-pong to keep connection alive
         };
 
         this.conn.onmessage = (e) => this.handleMessage(JSON.parse(e.data));
@@ -51,9 +52,17 @@ const derivWS = {
             handleCopyStart(response);
         } else if(response.copy_stop) {
             handleCopyStop(response);
-        } else if(response.copytrading_list) {
-            handleCopierList(response);
+        } else if(response.pong) {
+            log('🏓 Received pong', 'info');
         }
+    },
+
+    startPing: function() {
+        setInterval(() => {
+            if(this.conn.readyState === WebSocket.OPEN) {
+                this.send({ ping: 1 });
+            }
+        }, 30000); // Send ping every 30 seconds
     }
 };
 
@@ -70,6 +79,77 @@ document.addEventListener('DOMContentLoaded', () => {
     setupAccountsUI();
     derivWS.connect(tokens[0].token);
 });
+
+function parseTokensFromURL(params) {
+    const accounts = [];
+    let i = 1;
+    
+    while(params.get(`acct${i}`)) {
+        accounts.push({
+            id: params.get(`acct${i}`),
+            token: params.get(`token${i}`),
+            currency: params.get(`cur${i}`),
+            balance: 'Loading...'
+        });
+        i++;
+    }
+    
+    return accounts;
+}
+
+function setupAccountsUI() {
+    const container = document.getElementById('accountsContainer');
+    container.innerHTML = currentAccounts.map(acc => `
+        <div class="account-card">
+            <h3>💰 ${acc.id}</h3>
+            <p>${acc.currency.toUpperCase()} - ${acc.balance}</p>
+            <button class="copy-btn" onclick="handleCopyAction('${acc.id}')" 
+                ${!masterAccount ? 'disabled' : ''}>
+                ${activeCopies.has(acc.id) ? '🛑 Stop Copy' : '📋 Start Copy'}
+            </button>
+        </div>
+    `).join('');
+}
+
+function authenticateMaster() {
+    const token = document.getElementById('masterToken').value;
+    if(!token) {
+        log('⚠️ Please enter master token', 'error');
+        return;
+    }
+
+    const tempWS = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`);
+    tempWS.onopen = () => tempWS.send(JSON.stringify({ authorize: token }));
+    
+    tempWS.onmessage = (e) => {
+        const response = JSON.parse(e.data);
+        if(response.authorize) {
+            masterAccount = {
+                id: response.authorize.loginid,
+                currency: response.authorize.currency,
+                balance: response.authorize.balance,
+                token: token // Store the master's token
+            };
+            updateMasterUI();
+            log('🔓 Master authenticated successfully', 'success');
+        } else if(response.error) {
+            log(`❌ Master auth failed: ${response.error.message}`, 'error');
+        }
+        tempWS.close();
+    };
+}
+
+function updateMasterUI() {
+    const masterInfo = document.getElementById('masterInfo');
+    masterInfo.innerHTML = `
+        <h2>👑 Master Account</h2>
+        <p>ID: ${masterAccount.id}</p>
+        <p>Currency: ${masterAccount.currency}</p>
+        <p>Balance: ${masterAccount.balance}</p>
+        <button class="delete-btn" onclick="deleteMaster()">🗑️ Remove Master</button>
+    `;
+    setupAccountsUI();
+}
 
 async function handleCopyAction(accountId) {
     const account = currentAccounts.find(acc => acc.id === accountId);
@@ -102,10 +182,7 @@ async function handleCopyAction(accountId) {
     } else {
         derivWS.send({
             copy_start: masterAccount.token,
-            loginid: accountId,
-            assets: ["*"], // Allow all assets
-            trade_types: ["*"], // Allow all trade types
-            min_trade_stake: 1 // Set your minimum stake
+            loginid: accountId
         });
     }
 }
@@ -130,6 +207,25 @@ function handleCopyStop(response) {
     }
 }
 
+function deleteMaster() {
+    masterAccount = null;
+    document.getElementById('masterInfo').innerHTML = '';
+    setupAccountsUI();
+    log('🗑️ Master account removed', 'info');
+}
+
+function logout() {
+    // Stop all active copies
+    activeCopies.forEach((_, accountId) => {
+        derivWS.send({ copy_stop: accountId });
+    });
+
+    // Redirect after cleanup
+    setTimeout(() => {
+        window.location.href = 'index.html';
+    }, 1000);
+}
+
 function log(message, type = 'info', data = null) {
     const logContainer = document.getElementById('logContainer');
     const entry = document.createElement('div');
@@ -148,14 +244,4 @@ function log(message, type = 'info', data = null) {
     
     logContainer.appendChild(entry);
     logContainer.scrollTop = logContainer.scrollHeight;
-}
-
-// Add this to your CSS
-.log-data {
-    background: rgba(255, 255, 255, 0.1);
-    padding: 8px;
-    border-radius: 4px;
-    margin-top: 4px;
-    font-family: monospace;
-    white-space: pre-wrap;
 }
