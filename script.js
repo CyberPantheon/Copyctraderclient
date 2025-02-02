@@ -2,7 +2,6 @@ const APP_ID = 66842;
 let currentAccounts = [];
 let activeCopies = new Map();
 let masterAccount = null;
-let ws;
 
 const derivWS = {
     conn: null,
@@ -11,14 +10,14 @@ const derivWS = {
 
     connect: function(token) {
         this.currentToken = token;
-        if(this.conn) this.conn.close();
+        if (this.conn) this.conn.close();
         
         this.conn = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`);
         
         this.conn.onopen = () => {
             log('🔌 WebSocket connected', 'success');
             this.authorize(token);
-            this.startPing(); // Start ping-pong to keep connection alive
+            this.startPing();
         };
 
         this.conn.onmessage = (e) => this.handleMessage(JSON.parse(e.data));
@@ -31,7 +30,7 @@ const derivWS = {
     },
 
     send: function(data) {
-        if(this.conn.readyState === WebSocket.OPEN) {
+        if (this.conn.readyState === WebSocket.OPEN) {
             data.req_id = this.reqId++;
             this.conn.send(JSON.stringify(data));
             log(`📤 Sent: ${JSON.stringify(data, null, 2)}`, 'info', data);
@@ -41,28 +40,28 @@ const derivWS = {
     handleMessage: function(response) {
         log(`📥 Received: ${JSON.stringify(response, null, 2)}`, 'info', response);
         
-        if(response.error) {
+        if (response.error) {
             log(`❌ Error: ${response.error.message}`, 'error');
             return;
         }
 
-        if(response.authorize) {
+        if (response.authorize) {
             handleAuthorization(response);
-        } else if(response.copy_start) {
+        } else if (response.copy_start) {
             handleCopyStart(response);
-        } else if(response.copy_stop) {
+        } else if (response.copy_stop) {
             handleCopyStop(response);
-        } else if(response.pong) {
+        } else if (response.pong) {
             log('🏓 Received pong', 'info');
         }
     },
 
     startPing: function() {
         setInterval(() => {
-            if(this.conn.readyState === WebSocket.OPEN) {
+            if (this.conn.readyState === WebSocket.OPEN) {
                 this.send({ ping: 1 });
             }
-        }, 30000); // Send ping every 30 seconds
+        }, 30000);
     }
 };
 
@@ -70,7 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const params = new URLSearchParams(window.location.search);
     const tokens = parseTokensFromURL(params);
     
-    if(tokens.length === 0) {
+    if (tokens.length === 0) {
         log('⚠️ No valid accounts found', 'error');
         return;
     }
@@ -84,7 +83,7 @@ function parseTokensFromURL(params) {
     const accounts = [];
     let i = 1;
     
-    while(params.get(`acct${i}`)) {
+    while (params.get(`acct${i}`)) {
         accounts.push({
             id: params.get(`acct${i}`),
             token: params.get(`token${i}`),
@@ -113,7 +112,7 @@ function setupAccountsUI() {
 
 function authenticateMaster() {
     const token = document.getElementById('masterToken').value;
-    if(!token) {
+    if (!token) {
         log('⚠️ Please enter master token', 'error');
         return;
     }
@@ -123,16 +122,16 @@ function authenticateMaster() {
     
     tempWS.onmessage = (e) => {
         const response = JSON.parse(e.data);
-        if(response.authorize) {
+        if (response.authorize) {
             masterAccount = {
                 id: response.authorize.loginid,
                 currency: response.authorize.currency,
                 balance: response.authorize.balance,
-                token: token // Store the master's token
+                token: token
             };
             updateMasterUI();
             log('🔓 Master authenticated successfully', 'success');
-        } else if(response.error) {
+        } else if (response.error) {
             log(`❌ Master auth failed: ${response.error.message}`, 'error');
         }
         tempWS.close();
@@ -153,32 +152,32 @@ function updateMasterUI() {
 
 async function handleCopyAction(accountId) {
     const account = currentAccounts.find(acc => acc.id === accountId);
-    if(!account) return;
+    if (!account) return;
 
-    // Switch to target account's token
-    if(derivWS.currentToken !== account.token) {
+    if (derivWS.currentToken !== masterAccount.token) {
         await new Promise((resolve) => {
             const authHandler = (e) => {
                 const response = JSON.parse(e.data);
-                if(response.authorize?.loginid === accountId) {
+                if (response.authorize?.loginid === masterAccount.id) {
                     derivWS.conn.removeEventListener('message', authHandler);
                     resolve();
                 }
             };
             derivWS.conn.addEventListener('message', authHandler);
-            derivWS.authorize(account.token);
+            derivWS.authorize(masterAccount.token);
         });
     }
 
-    // Verify currency match
-    if(account.currency !== masterAccount.currency) {
+    if (account.currency !== masterAccount.currency) {
         log(`❌ Currency mismatch: ${account.currency} vs ${masterAccount.currency}`, 'error');
         return;
     }
 
-    // Send copy request
-    if(activeCopies.has(accountId)) {
-        derivWS.send({ copy_stop: activeCopies.get(accountId) });
+    if (activeCopies.has(accountId)) {
+        derivWS.send({
+            copy_stop: account.token,  // ✅ FIX: Use client's stored API token
+            loginid: accountId
+        });
     } else {
         derivWS.send({
             copy_start: masterAccount.token,
@@ -188,8 +187,8 @@ async function handleCopyAction(accountId) {
 }
 
 function handleCopyStart(response) {
-    if(response.msg_type === 'copy_start') {
-        activeCopies.set(response.echo_req.loginid, response.copy_start);
+    if (response.msg_type === 'copy_start' && response.copy_start === 1) {
+        activeCopies.set(response.echo_req.loginid, response.echo_req.copy_start);
         setupAccountsUI();
         log(`📈 Copy started for ${response.echo_req.loginid}`, 'success');
     } else {
@@ -198,7 +197,7 @@ function handleCopyStart(response) {
 }
 
 function handleCopyStop(response) {
-    if(response.msg_type === 'copy_stop') {
+    if (response.msg_type === 'copy_stop' && response.copy_stop === 1) {
         activeCopies.delete(response.echo_req.loginid);
         setupAccountsUI();
         log(`📉 Copy stopped for ${response.echo_req.loginid}`, 'info');
@@ -215,12 +214,13 @@ function deleteMaster() {
 }
 
 function logout() {
-    // Stop all active copies
-    activeCopies.forEach((token, accountId) => {
-        derivWS.send({ copy_stop: token }); // Use the stored token for copy_stop
+    activeCopies.forEach((_, accountId) => {
+        const account = currentAccounts.find(acc => acc.id === accountId);
+        if (account) {
+            derivWS.send({ copy_stop: account.token });  // ✅ FIX: Use correct token for stopping copy
+        }
     });
 
-    // Redirect after cleanup
     setTimeout(() => {
         window.location.href = 'index.html';
     }, 1000);
@@ -232,13 +232,13 @@ function log(message, type = 'info', data = null) {
     entry.className = `log-entry log-${type}`;
     
     let content = `[${new Date().toLocaleTimeString()}] ${message}`;
-    if(data) {
+    if (data) {
         content += `<div class="log-data">${JSON.stringify(data, null, 2)}</div>`;
     }
 
     entry.innerHTML = content;
     
-    if(logContainer.children.length > 50) {
+    if (logContainer.children.length > 50) {
         logContainer.removeChild(logContainer.firstChild);
     }
     
