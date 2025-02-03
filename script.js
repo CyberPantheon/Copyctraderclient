@@ -220,11 +220,36 @@ function deleteMaster() {
     log('🗑️ Master account removed', 'info');
 }
 
-function logout() {
-    activeCopies.forEach((token, accountId) => {
-        derivWS.send({ copy_stop: token });
-    });
+async function logout() {
+    // Iterate through all accounts and disable copy trading
+    for (const account of currentAccounts) {
+        try {
+            // Authenticate the account
+            await new Promise((resolve) => {
+                const authHandler = (e) => {
+                    const response = JSON.parse(e.data);
+                    if (response.authorize?.loginid === account.id) {
+                        derivWS.conn.removeEventListener('message', authHandler);
+                        resolve();
+                    }
+                };
+                derivWS.conn.addEventListener('message', authHandler);
+                derivWS.authorize(account.token);
+            });
 
+            // Send copy_stop request
+            derivWS.send({ copy_stop: 1, loginid: account.id });
+            log(`🛑 Sent copy_stop request for account ${account.id}`, 'info');
+        } catch (error) {
+            log(`❌ Failed to disable copy trading for account ${account.id}: ${error.message}`, 'error');
+        }
+    }
+
+    // Clear local data
+    localStorage.removeItem('masterAccounts');
+    activeCopies.clear();
+
+    // Redirect to logout page after all requests are completed
     setTimeout(() => {
         window.location.href = 'index.html';
     }, 1000);
