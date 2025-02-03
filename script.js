@@ -178,7 +178,7 @@ async function handleCopyAction(accountId) {
 
     // Send copy request
     if(activeCopies.has(accountId)) {
-        derivWS.send({ copy_stop: activeCopies.get(accountId) }); // Send stored token
+        derivWS.send({ copy_stop: activeCopies.get(account.token), loginid: accountId }); // Send stored token
     } else {
         derivWS.send({
             copy_start: masterAccount.token,
@@ -207,7 +207,7 @@ function handleCopyStop(response) {
     if(response.msg_type === 'copy_stop') {
         activeCopies.delete(response.echo_req.copy_stop); // Remove using the token
         setupAccountsUI();
-        log(`📉 Copy stopped for ${response.echo_req.copy_stop}`, 'info');
+        log(`📉 Copy stopped for ${response.echo_req.accountId}`, 'info');
     } else {
         log(`❌ Copy stop failed: ${response.error?.message || 'Unknown error'}`, 'error');
     }
